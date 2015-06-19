@@ -16,6 +16,7 @@
 
 package io.vertx.serviceproxy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.json.JsonObject;
@@ -27,34 +28,35 @@ import java.lang.reflect.Constructor;
  */
 public class ProxyHelper {
 
-  public static <T> T createProxy(Class<T> clazz, Vertx vertx, String address) {
+  public static <T> T createProxy(Class<T> clazz, Vertx vertx, String address, ObjectMapper objectMapper) {
     String proxyClassName = clazz.getName() + "VertxEBProxy";
     Class<?> proxyClass = loadClass(proxyClassName, clazz);
-    Constructor constructor = getConstructor(proxyClass, Vertx.class, String.class);
-    Object instance = createInstance(constructor, vertx, address);
+    Constructor constructor = getConstructor(proxyClass, Vertx.class, String.class, ObjectMapper.class);
+    Object instance = createInstance(constructor, vertx, address, objectMapper);
     return (T)instance;
   }
 
   public static final long DEFAULT_CONNECTION_TIMEOUT = 5 * 60; // 5 minutes
 
-  public static <T> MessageConsumer<JsonObject> registerService(Class<T> clazz, Vertx vertx, T service, String address) {
+  public static <T> MessageConsumer<JsonObject> registerService(Class<T> clazz, Vertx vertx, T service, String address,
+                                                                ObjectMapper objectMapper) {
     // No timeout - used for top level services
-    return registerService(clazz, vertx, service, address, DEFAULT_CONNECTION_TIMEOUT);
+    return registerService(clazz, vertx, service, address, DEFAULT_CONNECTION_TIMEOUT, objectMapper);
   }
 
   public static <T> MessageConsumer<JsonObject> registerService(Class<T> clazz, Vertx vertx, T service, String address,
-                                                                long timeoutSeconds) {
+                                                                long timeoutSeconds, ObjectMapper objectMapper) {
     // No timeout - used for top level services
-    return registerService(clazz, vertx, service, address, true, timeoutSeconds);
+    return registerService(clazz, vertx, service, address, true, timeoutSeconds, objectMapper);
   }
 
   public static <T> MessageConsumer<JsonObject> registerService(Class<T> clazz, Vertx vertx, T service, String address,
                                                                 boolean topLevel,
-                                                                long timeoutSeconds) {
+                                                                long timeoutSeconds, ObjectMapper objectMapper) {
     String handlerClassName = clazz.getName() + "VertxProxyHandler";
     Class<?> handlerClass = loadClass(handlerClassName, clazz);
-    Constructor constructor = getConstructor(handlerClass, Vertx.class, clazz, boolean.class, long.class);
-    Object instance = createInstance(constructor, vertx, service, topLevel, timeoutSeconds);
+    Constructor constructor = getConstructor(handlerClass, Vertx.class, clazz, boolean.class, long.class, ObjectMapper.class);
+    Object instance = createInstance(constructor, vertx, service, topLevel, timeoutSeconds, objectMapper);
     ProxyHandler handler = (ProxyHandler)instance;
     return handler.registerHandler(address);
   }

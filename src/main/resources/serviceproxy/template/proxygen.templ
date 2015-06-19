@@ -35,7 +35,7 @@
 				@if{param.type.args[0].kind == CLASS_DATA_OBJECT}
     _json.put("@{param.name}", new JsonArray(@{param.name}.stream().map(@{param.type.args[0].simpleName}::toJson).collect(Collectors.toList())));\n
 				@else{}
-    _json.put("@{param.name}", new JsonArray(@{param.name}));\n
+    _json.put("@{param.name}", new JsonArray(@{param.name}.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));\n
 				@end{}
 			@else{param.type.kind == CLASS_SET}
 				@if{param.type.args[0].kind == CLASS_DATA_OBJECT}
@@ -88,7 +88,7 @@ send(_address, _json, _deliveryOptions, res -> {\n
 					@end{}
 				@else{resultKind == CLASS_API && resultType.proxyGen}
         String addr = res.result().headers().get("proxyaddr");\n
-        @{lastParam.name}.handle(Future.succeededFuture(ProxyHelper.createProxy(@{resultType.simpleName}.class, _vertx, addr)));\n
+        @{lastParam.name}.handle(Future.succeededFuture(ProxyHelper.createProxy(@{resultType.simpleName}.class, _vertx, addr, objectMapper)));\n
 				@else{resultKind == CLASS_DATA_OBJECT}
         @{lastParam.name}.handle(Future.succeededFuture(res.result().body() == null ? null : new @{resultType.simpleName}(res.result().body())));\n
 				@else{}
@@ -132,13 +132,20 @@ import io.vertx.core.Vertx;\n
 import io.vertx.core.Future;\n
 import io.vertx.core.json.JsonObject;\n
 import io.vertx.core.json.JsonArray;\n
+import java.io.IOException;\n
 import java.util.ArrayList;\n
 import java.util.HashSet;\n
+import java.util.LinkedHashMap;\n
 import java.util.List;\n
 import java.util.Map;\n
 import java.util.Set;\n
 import java.util.stream.Collectors;\n
 import io.vertx.serviceproxy.ProxyHelper;\n
+\n
+import com.fasterxml.jackson.core.JsonProcessingException;\n
+import com.fasterxml.jackson.core.type.TypeReference;\n
+import com.fasterxml.jackson.databind.ObjectMapper;\n
+\n
 @foreach{importedType:importedTypes}
 	@if{!importedType.packageName.equals("java.lang")}
 		import @{importedType};\n
@@ -154,10 +161,12 @@ public class @{ifaceSimpleName}VertxEBProxy implements @{ifaceSimpleName} {\n
   private Vertx _vertx;\n
   private String _address;\n
   private boolean closed;\n
+  private ObjectMapper objectMapper;\n
 \n
-  public @{ifaceSimpleName}VertxEBProxy(Vertx vertx, String address) {\n
+  public @{ifaceSimpleName}VertxEBProxy(Vertx vertx, String address, ObjectMapper objectMapper) {\n
     this._vertx = vertx;\n
     this._address = address;\n
+    this.objectMapper = objectMapper;\n
   }\n
 \n
 @foreach{method:methods}
@@ -201,6 +210,14 @@ public class @{ifaceSimpleName}VertxEBProxy implements @{ifaceSimpleName} {\n
 
   private <T> Set<T> convertSet(List list) {\n
     return new HashSet<T>((List<T>)list);\n
+  }\n
+
+  private String writeAsString(Object obj) {\n
+    try{\n
+      return objectMapper.writeValueAsString(obj);\n
+    } catch (IOException e) {\n
+      throw new RuntimeException(e);\n
+    }\n
   }\n
 
 }

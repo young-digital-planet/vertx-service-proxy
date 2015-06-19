@@ -27,6 +27,7 @@ import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.json.JsonArray;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -37,6 +38,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import io.vertx.serviceproxy.ProxyHelper;
 import io.vertx.serviceproxy.ProxyHandler;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import io.vertx.serviceproxy.testmodel.TestService;
 import io.vertx.serviceproxy.testmodel.SomeEnum;
 import io.vertx.core.Vertx;
@@ -64,19 +69,22 @@ public class TestServiceVertxProxyHandler extends ProxyHandler {
   private final long timerID;
   private long lastAccessed;
   private final long timeoutSeconds;
+  private ObjectMapper objectMapper;
 
-  public TestServiceVertxProxyHandler(Vertx vertx, TestService service) {
-    this(vertx, service, DEFAULT_CONNECTION_TIMEOUT);  }
+  public TestServiceVertxProxyHandler(Vertx vertx, TestService service, ObjectMapper objectMapper) {
+    this(vertx, service, DEFAULT_CONNECTION_TIMEOUT, objectMapper);  }
 
   public TestServiceVertxProxyHandler(Vertx vertx, TestService service,
-    long timeoutInSecond) {
-    this(vertx, service, true, timeoutInSecond);
+    long timeoutInSecond, ObjectMapper objectMapper) {
+    this(vertx, service, true, timeoutInSecond, objectMapper);
   }
 
-  public TestServiceVertxProxyHandler(Vertx vertx, TestService service, boolean topLevel, long timeoutSeconds) {
+  public TestServiceVertxProxyHandler(Vertx vertx, TestService service, boolean topLevel, long timeoutSeconds,
+  ObjectMapper objectMapper) {
     this.vertx = vertx;
     this.service = service;
     this.timeoutSeconds = timeoutSeconds;
+    this.objectMapper = objectMapper;
     if (timeoutSeconds != -1 && !topLevel) {
       long period = timeoutSeconds * 1000 / 2;
       if (period > 10000) {
@@ -123,14 +131,13 @@ public class TestServiceVertxProxyHandler extends ProxyHandler {
     accessed();
     switch (action) {
 
-
       case "createConnection": {
         service.createConnection((java.lang.String)json.getValue("str"), res -> {
           if (res.failed()) {
             msg.fail(-1, res.cause().getMessage());
           } else {
             String proxyAddress = UUID.randomUUID().toString();
-            ProxyHelper.registerService(TestConnection.class, vertx, res.result(), proxyAddress, false, timeoutSeconds);
+            ProxyHelper.registerService(TestConnection.class, vertx, res.result(), proxyAddress, false, timeoutSeconds, objectMapper);
             msg.reply(null, new DeliveryOptions().addHeader("proxyaddr", proxyAddress));
           }
         });
@@ -142,7 +149,7 @@ public class TestServiceVertxProxyHandler extends ProxyHandler {
             msg.fail(-1, res.cause().getMessage());
           } else {
             String proxyAddress = UUID.randomUUID().toString();
-            ProxyHelper.registerService(TestConnectionWithCloseFuture.class, vertx, res.result(), proxyAddress, false, timeoutSeconds);
+            ProxyHelper.registerService(TestConnectionWithCloseFuture.class, vertx, res.result(), proxyAddress, false, timeoutSeconds, objectMapper);
             msg.reply(null, new DeliveryOptions().addHeader("proxyaddr", proxyAddress));
           }
         });
@@ -189,7 +196,7 @@ public class TestServiceVertxProxyHandler extends ProxyHandler {
         break;
       }
       case "listParams": {
-        service.listParams(convertList(json.getJsonArray("listString").getList()), convertList(json.getJsonArray("listByte").getList()), convertList(json.getJsonArray("listShort").getList()), convertList(json.getJsonArray("listInt").getList()), convertList(json.getJsonArray("listLong").getList()), convertList(json.getJsonArray("listJsonObject").getList()), convertList(json.getJsonArray("listJsonArray").getList()), json.getJsonArray("listDataObject").stream().map(o -> new TestDataObject((JsonObject)o)).collect(Collectors.toList()));
+        service.listParams(json.getJsonArray("listString").stream().map(o -> readValue(o, new TypeReference<java.lang.String>(){})).collect(Collectors.toList()), json.getJsonArray("listByte").stream().map(o -> readValue(o, new TypeReference<java.lang.Byte>(){})).collect(Collectors.toList()), json.getJsonArray("listShort").stream().map(o -> readValue(o, new TypeReference<java.lang.Short>(){})).collect(Collectors.toList()), json.getJsonArray("listInt").stream().map(o -> readValue(o, new TypeReference<java.lang.Integer>(){})).collect(Collectors.toList()), json.getJsonArray("listLong").stream().map(o -> readValue(o, new TypeReference<java.lang.Long>(){})).collect(Collectors.toList()), json.getJsonArray("listJsonObject").stream().map(o -> readValue(o, new TypeReference<io.vertx.core.json.JsonObject>(){})).collect(Collectors.toList()), json.getJsonArray("listJsonArray").stream().map(o -> readValue(o, new TypeReference<io.vertx.core.json.JsonArray>(){})).collect(Collectors.toList()), json.getJsonArray("listDataObject").stream().map(o -> new TestDataObject((JsonObject)o)).collect(Collectors.toList()));
         break;
       }
       case "setParams": {
@@ -506,5 +513,12 @@ public class TestServiceVertxProxyHandler extends ProxyHandler {
   }
   private <T> Set<T> convertSet(List list) {
     return new HashSet<T>((List<T>)list);
+  }
+  private <T> T readValue(Object obj, TypeReference<T> type) {
+    try{
+      return objectMapper.<T>readValue((String)obj, type);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

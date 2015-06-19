@@ -26,6 +26,7 @@ import io.vertx.core.eventbus.DeliveryOptions;\n
 import io.vertx.core.eventbus.ReplyException;\n
 import io.vertx.core.json.JsonObject;\n
 import io.vertx.core.json.JsonArray;\n
+import java.io.IOException;\n
 import java.util.Collection;\n
 import java.util.ArrayList;\n
 import java.util.HashSet;\n
@@ -36,6 +37,10 @@ import java.util.UUID;\n
 import java.util.stream.Collectors;\n
 import io.vertx.serviceproxy.ProxyHelper;\n
 import io.vertx.serviceproxy.ProxyHandler;\n
+\n
+import com.fasterxml.jackson.databind.ObjectMapper;\n
+import com.fasterxml.jackson.core.type.TypeReference;\n
+\n
 @foreach{importedType:importedTypes}
 	@if{!importedType.packageName.equals("java.lang")}
 		import @{importedType};\n
@@ -55,20 +60,23 @@ public class @{ifaceSimpleName}VertxProxyHandler extends ProxyHandler {\n
   private final long timerID;\n
   private long lastAccessed;\n
   private final long timeoutSeconds;\n
+  private ObjectMapper objectMapper;\n
 \n
-  public @{ifaceSimpleName}VertxProxyHandler(Vertx vertx, @{ifaceSimpleName} service) {\n
-    this(vertx, service, DEFAULT_CONNECTION_TIMEOUT);
+  public @{ifaceSimpleName}VertxProxyHandler(Vertx vertx, @{ifaceSimpleName} service, ObjectMapper objectMapper) {\n
+    this(vertx, service, DEFAULT_CONNECTION_TIMEOUT, objectMapper);
   }\n
 \n
   public @{ifaceSimpleName}VertxProxyHandler(Vertx vertx, @{ifaceSimpleName} service,\n
-    long timeoutInSecond) {\n
-    this(vertx, service, true, timeoutInSecond);\n
+    long timeoutInSecond, ObjectMapper objectMapper) {\n
+    this(vertx, service, true, timeoutInSecond, objectMapper);\n
   }\n
 \n
-  public @{ifaceSimpleName}VertxProxyHandler(Vertx vertx, @{ifaceSimpleName} service, boolean topLevel, long timeoutSeconds) {\n
+  public @{ifaceSimpleName}VertxProxyHandler(Vertx vertx, @{ifaceSimpleName} service, boolean topLevel, long timeoutSeconds,\n
+  ObjectMapper objectMapper) {\n
     this.vertx = vertx;\n
     this.service = service;\n
     this.timeoutSeconds = timeoutSeconds;\n
+    this.objectMapper = objectMapper;\n
     if (timeoutSeconds != -1 && !topLevel) {\n
       long period = timeoutSeconds * 1000 / 2;\n
       if (period > 10000) {\n
@@ -140,13 +148,13 @@ json.getString("@{param.name}") == null ? null : @{param.type.name}.valueOf(json
 				@else{param.type.kind == CLASS_LIST}
 					@if{param.type.args[0].kind == CLASS_DATA_OBJECT}
 json.getJsonArray("@{param.name}").stream().map(o -> new @{param.type.args[0].simpleName}((JsonObject)o)).collect(Collectors.toList())
-					@else{}		
-convertList(json.getJsonArray("@{param.name}").getList())
+					@else{}
+json.getJsonArray("@{param.name}").stream().map(o -> readValue(o, new TypeReference<@{param.type.args[0].format(true)}>(){})).collect(Collectors.toList())
 					@end{}
 				@else{param.type.kind == CLASS_SET}
 					@if{param.type.args[0].kind == CLASS_DATA_OBJECT}
 json.getJsonArray("@{param.name}").stream().map(o -> new @{param.type.args[0].simpleName}((JsonObject)o)).collect(Collectors.toSet())
-					@else{}		
+					@else{}
 convertSet(json.getJsonArray("@{param.name}").getList())
 					@end{}
 				@else{param.type.kind == CLASS_MAP}
@@ -194,7 +202,7 @@ res -> {\n
             msg.fail(-1, res.cause().getMessage());\n
           } else {\n
             String proxyAddress = UUID.randomUUID().toString();\n
-            ProxyHelper.registerService(@{lastParam.type.args[0].args[0].simpleName}.class, vertx, res.result(), proxyAddress, false, timeoutSeconds);\n
+            ProxyHelper.registerService(@{lastParam.type.args[0].args[0].simpleName}.class, vertx, res.result(), proxyAddress, false, timeoutSeconds, objectMapper);\n
             msg.reply(null, new DeliveryOptions().addHeader("proxyaddr", proxyAddress));\n
           }\n
         }
@@ -287,5 +295,12 @@ createHandler(msg)
     return new HashSet<T>((List<T>)list);\n
   }\n
 
+  private <T> T readValue(Object obj, TypeReference<T> type) {\n
+    try{\n
+      return objectMapper.<T>readValue((String)obj, type);\n
+    } catch (IOException e) {\n
+      throw new RuntimeException(e);\n
+    }\n
+  }\n
 }
 

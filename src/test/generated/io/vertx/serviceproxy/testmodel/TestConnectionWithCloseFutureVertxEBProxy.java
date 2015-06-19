@@ -22,13 +22,20 @@ import io.vertx.core.Vertx;
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.json.JsonArray;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import io.vertx.serviceproxy.ProxyHelper;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 
@@ -41,10 +48,12 @@ public class TestConnectionWithCloseFutureVertxEBProxy implements TestConnection
   private Vertx _vertx;
   private String _address;
   private boolean closed;
+  private ObjectMapper objectMapper;
 
-  public TestConnectionWithCloseFutureVertxEBProxy(Vertx vertx, String address) {
+  public TestConnectionWithCloseFutureVertxEBProxy(Vertx vertx, String address, ObjectMapper objectMapper) {
     this._vertx = vertx;
     this._address = address;
+    this.objectMapper = objectMapper;
   }
 
   public void close(Handler<AsyncResult<Void>> handler) {
@@ -109,5 +118,12 @@ public class TestConnectionWithCloseFutureVertxEBProxy implements TestConnection
   }
   private <T> Set<T> convertSet(List list) {
     return new HashSet<T>((List<T>)list);
+  }
+  private String writeAsString(Object obj) {
+    try{
+      return objectMapper.writeValueAsString(obj);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

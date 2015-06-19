@@ -22,13 +22,20 @@ import io.vertx.core.Vertx;
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.json.JsonArray;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import io.vertx.serviceproxy.ProxyHelper;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.vertx.serviceproxy.testmodel.TestService;
 import io.vertx.serviceproxy.testmodel.SomeEnum;
 import io.vertx.core.Vertx;
@@ -52,10 +59,12 @@ public class TestServiceVertxEBProxy implements TestService {
   private Vertx _vertx;
   private String _address;
   private boolean closed;
+  private ObjectMapper objectMapper;
 
-  public TestServiceVertxEBProxy(Vertx vertx, String address) {
+  public TestServiceVertxEBProxy(Vertx vertx, String address, ObjectMapper objectMapper) {
     this._vertx = vertx;
     this._address = address;
+    this.objectMapper = objectMapper;
   }
 
   public void createConnection(String str, Handler<AsyncResult<TestConnection>> resultHandler) {
@@ -72,7 +81,7 @@ public class TestServiceVertxEBProxy implements TestService {
         resultHandler.handle(Future.failedFuture(res.cause()));
       } else {
         String addr = res.result().headers().get("proxyaddr");
-        resultHandler.handle(Future.succeededFuture(ProxyHelper.createProxy(TestConnection.class, _vertx, addr)));
+        resultHandler.handle(Future.succeededFuture(ProxyHelper.createProxy(TestConnection.class, _vertx, addr, objectMapper)));
       }
     });
   }
@@ -90,7 +99,7 @@ public class TestServiceVertxEBProxy implements TestService {
         resultHandler.handle(Future.failedFuture(res.cause()));
       } else {
         String addr = res.result().headers().get("proxyaddr");
-        resultHandler.handle(Future.succeededFuture(ProxyHelper.createProxy(TestConnectionWithCloseFuture.class, _vertx, addr)));
+        resultHandler.handle(Future.succeededFuture(ProxyHelper.createProxy(TestConnectionWithCloseFuture.class, _vertx, addr, objectMapper)));
       }
     });
   }
@@ -235,13 +244,13 @@ public class TestServiceVertxEBProxy implements TestService {
       throw new IllegalStateException("Proxy is closed");
     }
     JsonObject _json = new JsonObject();
-    _json.put("listString", new JsonArray(listString));
-    _json.put("listByte", new JsonArray(listByte));
-    _json.put("listShort", new JsonArray(listShort));
-    _json.put("listInt", new JsonArray(listInt));
-    _json.put("listLong", new JsonArray(listLong));
-    _json.put("listJsonObject", new JsonArray(listJsonObject));
-    _json.put("listJsonArray", new JsonArray(listJsonArray));
+    _json.put("listString", new JsonArray(listString.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));
+    _json.put("listByte", new JsonArray(listByte.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));
+    _json.put("listShort", new JsonArray(listShort.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));
+    _json.put("listInt", new JsonArray(listInt.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));
+    _json.put("listLong", new JsonArray(listLong.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));
+    _json.put("listJsonObject", new JsonArray(listJsonObject.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));
+    _json.put("listJsonArray", new JsonArray(listJsonArray.stream().map(o -> writeAsString(o)).collect(Collectors.toList())));
     _json.put("listDataObject", new JsonArray(listDataObject.stream().map(TestDataObject::toJson).collect(Collectors.toList())));
     DeliveryOptions _deliveryOptions = new DeliveryOptions();
     _deliveryOptions.addHeader("action", "listParams");
@@ -1215,5 +1224,12 @@ public class TestServiceVertxEBProxy implements TestService {
   }
   private <T> Set<T> convertSet(List list) {
     return new HashSet<T>((List<T>)list);
+  }
+  private String writeAsString(Object obj) {
+    try{
+      return objectMapper.writeValueAsString(obj);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

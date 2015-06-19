@@ -16,10 +16,8 @@
 
 package io.vertx.serviceproxy.testmodel;
 
-import io.vertx.codegen.annotations.Fluent;
-import io.vertx.codegen.annotations.ProxyGen;
-import io.vertx.codegen.annotations.ProxyIgnore;
-import io.vertx.codegen.annotations.VertxGen;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.vertx.codegen.annotations.*;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
@@ -43,8 +41,9 @@ public interface TestService {
     return new TestServiceImpl(vertx);
   }
 
-  static TestService createProxy(Vertx vertx, String address) {
-    return ProxyHelper.createProxy(TestService.class, vertx, address);
+  @GenIgnore
+  static TestService createProxy(Vertx vertx, String address, ObjectMapper objectMapper) {
+    return ProxyHelper.createProxy(TestService.class, vertx, address, objectMapper);
   }
 
   void createConnection(String str, Handler<AsyncResult<TestConnection>> resultHandler);

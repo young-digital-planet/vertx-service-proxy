@@ -27,6 +27,7 @@ import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.json.JsonArray;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -37,6 +38,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import io.vertx.serviceproxy.ProxyHelper;
 import io.vertx.serviceproxy.ProxyHandler;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+
 
 /*
   Generated Proxy code - DO NOT EDIT
@@ -51,19 +56,22 @@ public class TestBaseImportsServiceVertxProxyHandler extends ProxyHandler {
   private final long timerID;
   private long lastAccessed;
   private final long timeoutSeconds;
+  private ObjectMapper objectMapper;
 
-  public TestBaseImportsServiceVertxProxyHandler(Vertx vertx, TestBaseImportsService service) {
-    this(vertx, service, DEFAULT_CONNECTION_TIMEOUT);  }
+  public TestBaseImportsServiceVertxProxyHandler(Vertx vertx, TestBaseImportsService service, ObjectMapper objectMapper) {
+    this(vertx, service, DEFAULT_CONNECTION_TIMEOUT, objectMapper);  }
 
   public TestBaseImportsServiceVertxProxyHandler(Vertx vertx, TestBaseImportsService service,
-    long timeoutInSecond) {
-    this(vertx, service, true, timeoutInSecond);
+    long timeoutInSecond, ObjectMapper objectMapper) {
+    this(vertx, service, true, timeoutInSecond, objectMapper);
   }
 
-  public TestBaseImportsServiceVertxProxyHandler(Vertx vertx, TestBaseImportsService service, boolean topLevel, long timeoutSeconds) {
+  public TestBaseImportsServiceVertxProxyHandler(Vertx vertx, TestBaseImportsService service, boolean topLevel, long timeoutSeconds,
+  ObjectMapper objectMapper) {
     this.vertx = vertx;
     this.service = service;
     this.timeoutSeconds = timeoutSeconds;
+    this.objectMapper = objectMapper;
     if (timeoutSeconds != -1 && !topLevel) {
       long period = timeoutSeconds * 1000 / 2;
       if (period > 10000) {
@@ -179,5 +187,12 @@ public class TestBaseImportsServiceVertxProxyHandler extends ProxyHandler {
   }
   private <T> Set<T> convertSet(List list) {
     return new HashSet<T>((List<T>)list);
+  }
+  private <T> T readValue(Object obj, TypeReference<T> type) {
+    try{
+      return objectMapper.<T>readValue((String)obj, type);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }
